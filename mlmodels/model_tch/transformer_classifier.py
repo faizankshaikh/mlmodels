@@ -15,6 +15,11 @@ import random
 import json
 import math
 
+
+
+from sklearn.metrics import mean_squared_error, matthews_corrcoef, confusion_matrix
+from scipy.stats import pearsonr
+
 import numpy as np
 import torch
 from torch.utils.data import (DataLoader, RandomSampler, SequentialSampler,
@@ -39,14 +44,14 @@ from util_transformer import (convert_examples_to_features,
 
 
 ###################################################################################################
-
-
 MODEL_CLASSES = {
     'bert': (BertConfig, BertForSequenceClassification, BertTokenizer),
     'xlnet': (XLNetConfig, XLNetForSequenceClassification, XLNetTokenizer),
     'xlm': (XLMConfig, XLMForSequenceClassification, XLMTokenizer),
     'roberta': (RobertaConfig, RobertaForSequenceClassification, RobertaTokenizer)
 }
+
+
 
 ####################################################################################################
 # Helper functions
@@ -84,7 +89,6 @@ class Model:
             
             config_class, model_class, tokenizer_class = MODEL_CLASSES[args['model_type']]
 
-
             self.config = config_class.from_pretrained(args['model_name'], num_labels=2, finetuning_task=args['task_name'])
             self.tokenizer = tokenizer_class.from_pretrained(args['model_name'])
 
@@ -102,10 +106,9 @@ def _preprocess_XXXX(df, **kw):
 
 
 def get_dataset(task, tokenizer, evaluate=False):
-    processor = processors[task]()
+    processor   = processors[task]()
     output_mode = args['output_mode']
-    
-    mode = 'dev' if evaluate else 'train'
+    mode        = 'dev' if evaluate else 'train'
     cached_features_file = os.path.join(args['data_dir'], f"cached_{mode}_{args['model_name']}_{args['max_seq_length']}_{task}")
     
     if os.path.exists(cached_features_file) and not args['reprocess_input_data']:
@@ -131,9 +134,10 @@ def get_dataset(task, tokenizer, evaluate=False):
         log("Saving features into cached file %s", cached_features_file)
         torch.save(features, cached_features_file)
         
-    all_input_ids = torch.tensor([f.input_ids for f in features], dtype=torch.long)
-    all_input_mask = torch.tensor([f.input_mask for f in features], dtype=torch.long)
-    all_segment_ids = torch.tensor([f.segment_ids for f in features], dtype=torch.long)
+    all_input_ids    = torch.tensor([f.input_ids for f in features], dtype=torch.long)
+    all_input_mask   = torch.tensor([f.input_mask for f in features], dtype=torch.long)
+    all_segment_ids  = torch.tensor([f.segment_ids for f in features], dtype=torch.long)
+
     if output_mode == "classification":
         all_label_ids = torch.tensor([f.label_id for f in features], dtype=torch.long)
     elif output_mode == "regression":
@@ -144,9 +148,8 @@ def get_dataset(task, tokenizer, evaluate=False):
 
 
 def fit(train_dataset, model, tokenizer):
-    tb_writer = SummaryWriter()
-    
-    train_sampler = RandomSampler(train_dataset)
+    tb_writer        = SummaryWriter()
+    train_sampler    = RandomSampler(train_dataset)
     train_dataloader = DataLoader(train_dataset, sampler=train_sampler, batch_size=args['train_batch_size'])
     
     t_total = len(train_dataloader) // args['gradient_accumulation_steps'] * args['num_train_epochs']
@@ -186,7 +189,7 @@ def fit(train_dataset, model, tokenizer):
         epoch_iterator = tqdm_notebook(train_dataloader, desc="Iteration")
         for step, batch in enumerate(epoch_iterator):
             model.train()
-            batch = tuple(t.to(device) for t in batch)
+            batch  = tuple(t.to(device) for t in batch)
             inputs = {'input_ids':      batch[0],
                       'attention_mask': batch[1],
                       'token_type_ids': batch[2] if args['model_type'] in ['bert', 'xlnet'] else None,  # XLM don't use segment_ids
@@ -258,8 +261,7 @@ def predict(model, data_pars, compute_pars=None, out_pars=None, **kwargs):
 
 
 
-from sklearn.metrics import mean_squared_error, matthews_corrcoef, confusion_matrix
-from scipy.stats import pearsonr
+
 
 def get_mismatched(labels, preds):
     mismatched = labels != preds
@@ -364,10 +366,13 @@ class Model_empty(object):
 
 
 def save(model, path):
-    if not os.path.exists(os.path.dirname(path)):
-        print("model file path do not exist!")
-    else:
-        save_model(model.model, path)
+    # Save model checkpoint
+    output_dir = path  # = os.path.join(args['output_dir'], 'checkpoint-{}'.format(global_step))
+    os.makedirs(output_dir, exist_ok=True)
+    model_to_save = model.module if hasattr(model, 'module') else model  # Take care of distributed/parallel training
+    model_to_save.save_pretrained(output_dir)
+    log("Saving model checkpoint to %s", output_dir)
+
 
 
 def load(path):
@@ -406,6 +411,8 @@ def get_params(choice=0, data_path="dataset/", **kw):
         out_pars = {"path": out_path}
 
     return model_pars, data_pars, compute_pars, out_pars
+
+
 
 
 ########################################################################################################################
