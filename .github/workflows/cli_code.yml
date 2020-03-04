@@ -1,10 +1,10 @@
 name: cli_code
 
 
-on:
-  push:
-    branches: 
-      - dev
+on: [push]
+  #push:
+  #  branches: 
+  #    - dev
  
 jobs:
   build:
