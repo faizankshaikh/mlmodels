@@ -247,7 +247,7 @@ def get_dataset(data_pars=None, **kw):
     elif data_pars[f"{mode}_type"].lower() == 'sts':
         Reader = readers.STSDataReader
 
-    path = os.path.join(data_path + "/text/", data_pars[f"{mode}_path"])
+    path = os.path.join(data_path, data_pars[f"{mode}_path"])
     reader = Reader(path)
     return reader
 
@@ -268,9 +268,9 @@ def get_params(param_pars, **kw):
 
     if choice == "test01":
         log("#### Path params   ##########################################")
-        data_path  = path_norm( "dataset/text/"  )   
-        out_path   = path_norm( "/ztest/model_tch/transformer_sentence/" )   
-        model_path = os.path.join(out_path , "model")
+        data_path  = path_norm("dataset/text/")
+        out_path   = path_norm("/ztest/model_tch/transformer_sentence/" )   
+        model_path = os.path.join(out_path, "model")
 
         data_pars = {
             "data_path" : data_path,
@@ -288,7 +288,6 @@ def get_params(param_pars, **kw):
         }
 
         compute_pars = {
-            # "loss": "CosineSimilarityLoss",
             "loss": "SoftmaxLoss",
             "batch_size": 32,
             "num_epochs": 1,
@@ -309,7 +308,7 @@ def test(data_path="dataset/", pars_choice="test01"):
     ### Local test
 
     log("#### Loading params   ##############################################") 
-    param_pars = { "choice": pars_choice, "data_path": data_path, "config_mode" : "test" }
+    param_pars = { "choice": pars_choice, "data_path": '', "config_mode" : "test" }
     model_pars, data_pars, compute_pars, out_pars = get_params(param_pars)
 
 

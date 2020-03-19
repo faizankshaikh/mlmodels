@@ -189,6 +189,7 @@ def create_data_iterator(tr_batch_size, val_batch_size, tabular_train,
 class TextCNN(nn.Module):
 
     def __init__(self, model_pars=None, **kwargs):
+        print(model_pars)
         kernel_wins = [int(x) for x in model_pars["kernel_height"]]
         super(TextCNN, self).__init__()
         # load pretrained embedding in embedding layer.
@@ -246,7 +247,8 @@ def get_params(param_pars=None, **kw):
 
     if choice == "json":
         data_path = path_norm(data_path) 
-        cf = json.load(open(data_path, mode='r'))
+        with open(data_path, 'rb') as f:
+            cf = json.load(f)
         cf = cf[config_mode]
         return cf['model_pars'], cf['data_pars'], cf['compute_pars'], cf['out_pars']
 
@@ -257,17 +259,37 @@ def get_params(param_pars=None, **kw):
         out_path   = path_norm( "/ztest/model_keras/charcnn/" )   
         model_path = os.path.join(out_path , "model")
 
+        data_pars= {
+			"data_path": "dataset/recommender/IMDB_sample.txt",
+            "split_if_exists": True,
+			"frac": 0.7,
+            "lang": "en",
+            "pretrained_emb": "glove.6B.300d",
+            "batch_size": 64,
+            "val_batch_size": 64
+		}
 
-        data_pars = {"path": data_path, "train": 1, "maxlen": 400, "max_features": 10, }
 
-        model_pars = {"maxlen": 400, "max_features": 10, "embedding_dims": 50,
-                      }
-        compute_pars = {"engine": "adam", "loss": "binary_crossentropy", "metrics": ["accuracy"],
-                        "batch_size": 32, "epochs": 1
-                        }
+        model_pars= {
+            "dim_channel": 100,
+            "kernel_height": [3,4,5],
+            "dropout_rate": 0.5,
+            "num_class": 2
+		}
 
-        out_pars = {"path": out_path, "model_path": model_path}
 
+        compute_pars= {
+            "learning_rate": 0.001,
+            "epochs": 2,
+            "checkpointdir": "/tmp"
+        }
+
+        out_pars= {
+            "train_path": "/tmp/IMDB_train.csv",
+            "valid_path": "/tmp/IMDB_valid.csv",
+            "checkpointdir": "/tmp"
+        }
+        
         return model_pars, data_pars, compute_pars, out_pars
 
 
@@ -365,7 +387,7 @@ def load(path):
 ###########################################################################################################
 def test():
     print("\n####### Getting params... ####################\n")
-    param_pars = { "choice" : "json", "data_path" : "model_tch/textcnn.json", "config_mode" : "test" }
+    param_pars = { "choice" : "test01", "data_path" : "model_tch/textcnn.json", "config_mode" : "test" }
     model_pars, data_pars, compute_pars, out_pars = get_params( param_pars )
     
 

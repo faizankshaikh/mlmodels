@@ -381,19 +381,16 @@ from mlmodels.models import module_load
 from mlmodels.optim import optim
 import json
 
+###  hypermodel_pars, model_pars, ....
 data_path = '../mlmodels/dataset/json/hyper_titanic_randomForest.json'  
 pars = json.load(open( data_path , mode='r'))
 for key, pdict in  pars.items() :
+  print(key)
   globals()[key] = pdict   
 
-hypermodel_pars = test['hypermodel_pars']
-model_pars      = test['model_pars']
-data_pars       = test['data_pars']
-compute_pars    = test['compute_pars']
-out_pars        = test['out_pars']
 
 model_uri    = "model_sklearn.sklearn.py"
-module        =  module_load( model_uri= model_uri )                           # Load file definition
+module       =  module_load( model_uri= model_uri )                      
 
 model_pars_update = optim(
     model_uri       = model_uri,
@@ -403,6 +400,7 @@ model_pars_update = optim(
     compute_pars    = compute_pars,
     out_pars        = out_pars
 )
+
 ```
 
 

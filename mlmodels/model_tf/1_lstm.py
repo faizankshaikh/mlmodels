@@ -12,7 +12,7 @@ import tensorflow as tf
 from sklearn.preprocessing import MinMaxScaler
 
 ####################################################################################################
-from mlmodels.util import os_package_root_path, log
+from mlmodels.util import os_package_root_path, log, params_json_load
 
 
 
@@ -194,7 +194,22 @@ def load(load_pars={}):
 ####################################################################################################
 def get_dataset(data_pars=None):
     """
-      JSON data_pars  to  actual dataframe of data
+              "path"            : "dataset/text/ner_dataset.csv",
+              "location_type"   :  "repo",
+              "data_type"   :   "text",
+
+
+              "data_loader" :  "pandas.read_csv",
+              "data_loader_pars" :  {""},
+
+
+              "data_preprocessor" : "mlmodels.model_keras.prepocess:process",
+              "data_preprocessor_pars" : "mlmodels.model_keras.prepocess:process",              
+
+              "size" : [0,1,2],
+              "output_size": [0, 6]  
+
+
     """
     print(data_pars)
     filename = data_pars["data_path"]  #
@@ -221,9 +236,12 @@ def get_params(param_pars={}, **kw):
     data_path   = pp['data_path']
 
     if choice == "json":
-       cf = json.load(open(data_path, mode='r'))
-       cf = cf[config_mode]
-       return cf['model_pars'], cf['data_pars'], cf['compute_pars'], cf['out_pars']
+       cf = params_json_load(data_path) 
+       #  cf['model_pars'], cf['data_pars'], cf['compute_pars'], cf['out_pars']
+       return cf
+       #cf = json.load(open(data_path, mode='r'))
+       #cf = cf[config_mode]
+       #return cf['model_pars'], cf['data_pars'], cf['compute_pars'], cf['out_pars']
 
 
     if choice == "test":

@@ -31,6 +31,37 @@ def os_package_root_path(add_path="",n=0):
   return add_path
 """
 
+
+
+def tf_deprecation() :
+  try :
+    from tensorflow.python.util import deprecation
+    deprecation._PRINT_DEPRECATION_WARNINGS = False
+    print("Deprecaton set to False")
+  except : 
+    pass
+
+
+
+def params_json_load(path, config_mode="test"):
+  import json
+  pars = json.load(open(path, mode="rb"))
+  pars = pars[config_mode]
+
+  ### HyperParam, model_pars, data_pars,
+  list_pars = [] 
+  for t in [ "hypermodel_pars", "model_pars", "data_pars", "compute_pars", "out_pars" ] :
+    pdict = pars.get(t)
+    if pdict :
+       list_pars.append(pdict)
+    else :
+       log("error in json, cannot load ",t)
+
+  return tuple(list_pars)
+
+
+
+
 def path_local_setup(current_file=None, out_folder="", sublevel=1, data_path="dataset/"):
     """
       mlmodels/dataset/

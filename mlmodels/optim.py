@@ -25,23 +25,20 @@ import json
 import os
 import re
 
-import pandas as pd
-import optuna
+# import pandas as pd
+
 
 ####################################################################################################
 # from mlmodels import models
 from mlmodels.models import model_create, module_load, save
-from mlmodels.util import log, os_package_root_path, path_norm
+from mlmodels.util import log, os_package_root_path, path_norm, tf_deprecation
 
 
 ####################################################################################################
-try :
-  from tensorflow.python.util import deprecation
-  deprecation._PRINT_DEPRECATION_WARNINGS = False
-except : pass
-
+tf_deprecation()
 
 VERBOSE = False
+
 
 
 
@@ -62,6 +59,12 @@ def optim(model_uri="model_tf.1_lstm.py",
         return optim_optuna(model_uri,  hypermodel_pars, 
                             model_pars, data_pars, compute_pars,
                             out_pars)
+
+    if compute_pars["engine"] == "skopt" :
+        return optim_skopt(model_uri,  hypermodel_pars, 
+                            model_pars, data_pars, compute_pars,
+                            out_pars)
+
     return None
 
 
@@ -101,12 +104,14 @@ def optim_optuna(model_uri="model_tf.1_lstm.py",
     drop_path_rate = trial.suggest_discrete_uniform('drop_path_rate', 0.0, 1.0, 0.1) # Discrete-uniform parameter
     
     """
+    import optuna
+
     save_path     = out_pars['save_path']
     log_path      = out_pars['log_path']
     ntrials       = compute_pars['ntrials']
     metric_target = compute_pars["metric_target"]
     #model_type    = model_pars['model_type']
-    model_name = model_pars["model_name"]
+    model_name = model_pars.get("model_name")   #### Only for sklearn model
     log(model_pars, data_pars, compute_pars)
 
     module = module_load(model_uri)
@@ -162,20 +167,114 @@ def optim_optuna(model_uri="model_tf.1_lstm.py",
     param_dict_best =  study.best_params
     # param_dict.update(module.config_get_pars(choice="test", )
 
+    log("### Save Stats   ##########################################################")
+    study_trials = study.trials_dataframe()
+    study_trials.to_csv(f"{save_path}/{model_uri}_study.csv")
+    param_dict_best["best_value"] = study.best_value
+    json.dump( param_dict_best, open(f"{save_path}/{model_uri}_best-params.json", mode="w") )
+
+
+
+    log("### Run Model with best   #################################################")    
     model_pars_update = model_pars
     model_pars_update.update( param_dict_best)
-    model_pars_update["model_name"] = model_name
+    model_pars_update["model_name"] = model_name  ###SKLearn model
 
-
-    log("### Run Model with best   #################################################")
     model        = model_create( module, model_pars_update, data_pars, compute_pars)
     model, sess  = module.fit(model,  data_pars=data_pars, compute_pars= compute_pars, out_pars=out_pars)
 
-    """
+    
     log("#### Saving     ###########################################################")
     model_uri = model_uri.replace(".", "-")  
-    #save_pars = {'path': save_path, 'model_type': model_type, 'model_uri': model_uri}
+    save_pars = {'path': save_path, 'model_type': model_uri.split("-")[0], 'model_uri': model_uri}
     module.save( model=model, session=sess, save_pars= save_pars )
+
+
+    ## model_pars_update["model_name"] = model_name    
+    return model_pars_update
+
+
+
+
+
+
+
+
+def optim_skopt(model_uri="model_tf.1_lstm.py",
+                 hypermodel_pars = {},
+                 model_pars      = {},
+                 data_pars       = {},
+                 compute_pars    = {"method" : "normal/prune", 'ntrials': 2, "metric_target": "loss" },
+                 out_pars        = {} ) :
+    """
+
+
+    
+    """
+    save_path     = out_pars['save_path']
+    log_path      = out_pars['log_path']
+    ntrials       = compute_pars['ntrials']
+    metric_target = compute_pars["metric_target"]
+    #model_type    = model_pars['model_type']
+    model_name = model_pars.get("model_name")   #### Only for sklearn model
+    log(model_pars, data_pars, compute_pars)
+    module = module_load(model_uri)
+    log(module)
+
+
+    def objective(trial):
+        log("check", module, data_pars)
+        for t,p  in hypermodel_pars.items():
+            # type, init, range[0,1]
+            x = p['type']
+
+
+            if   x=='log_uniform':       pres = trial.suggest_loguniform(t,p['range'][0], p['range'][1])
+            elif x=='int':               pres = trial.suggest_int(t,p['range'][0], p['range'][1])
+            elif x=='categorical':       pres = trial.suggest_categorical(t,p['value'])
+            elif x=='discrete_uniform':  pres = trial.suggest_discrete_uniform(t, p['init'],p['range'][0],p['range'][1])
+            elif x=='uniform':           pres = trial.suggest_uniform(t,p['range'][0], p['range'][1])
+            
+
+            else:
+                raise Exception( f'Not supported type {x}')
+                pres = None
+
+            model_pars[t] = pres
+
+        model = model_create(module, model_pars, data_pars, compute_pars)   # module.Model(**param_dict)
+        if VERBOSE : log(model)
+
+        model, sess    = module.fit(model, data_pars=data_pars, compute_pars= compute_pars, out_pars=out_pars)
+        metrics        = module.fit_metrics(model, data_pars=data_pars, compute_pars= compute_pars, out_pars=out_pars)
+
+        del sess, model
+        try :
+           module.reset_model()  # Reset Graph for TF
+        except Exception as e :
+           log(e)
+
+        return metrics[ metric_target ]
+
+
+    log("###### Hyper-optimization through study   ##################################")
+    pruner = optuna.pruners.MedianPruner() if compute_pars["method"] =='prune' else None
+          
+    if compute_pars.get("distributed") is not None :
+          # study = optuna.load_study(study_name='distributed-example', storage='sqlite:///example.db')
+          try :
+             study = optuna.load_study(study_name= compute_pars['study_name'] , storage=compute_pars['storage'] )
+          except:
+             study = optuna.create_study(study_name= compute_pars['study_name'], storage=compute_pars['storage'], 
+                                         pruner=pruner )
+    else :           
+         study = optuna.create_study(pruner=pruner)
+
+
+    study.optimize(objective, n_trials=ntrials)  # Invoke optimization of the objective function.
+    log("Optim, finished", n=35)
+    param_dict_best =  study.best_params
+    # param_dict.update(module.config_get_pars(choice="test", )
 
 
     log("### Save Stats   ##########################################################")
@@ -185,11 +284,34 @@ def optim_optuna(model_uri="model_tf.1_lstm.py",
     param_dict_best["best_value"] = study.best_value
     # param_dict["file_path"] = file_path
     json.dump( param_dict_best, open(f"{save_path}/{model_uri}_best-params.json", mode="w") )
-    """
 
-    model_pars_update["model_name"] = model_name
-    
+
+    log("### Post Proces   ##########################################################")
+    model_pars_update = post_process_best(model, model_uri, model_pars_update, data_pars, compute_pars, out_pars) 
     return model_pars_update
+
+
+
+
+
+
+def post_process_best(model, model_uri, model_pars_update, data_pars, compute_pars, out_pars) :
+
+    log("### Run Model with best   #################################################")
+    model        = model_create( module, model_pars_update, data_pars, compute_pars)
+    model, sess  = module.fit(model,  data_pars=data_pars, compute_pars= compute_pars, out_pars=out_pars)
+
+    
+    log("#### Saving     ###########################################################")
+    model_uri = model_uri.replace(".", "-")  
+    save_pars = {'path': save_path, 'model_type': model_uri.split("-")[0], 'model_uri': model_uri}
+    module.save( model=model, session=sess, save_pars= save_pars )
+
+
+    return model_pars_update
+
+
+
 
 
 
@@ -199,7 +321,7 @@ def optim_optuna(model_uri="model_tf.1_lstm.py",
 ####################################################################################################
 def test_json(path_json="", config_mode="test"):
 
-    cf = json.load(open(path_json, mode='r', encoding='utf-8'))
+    cf = json.load(open(path_json, mode='rb', encoding='utf-8'))
     cf = cf[config_mode]
 
     model_uri = cf['model_pars']['model_uri']  # 'model_tf.1_lstm'
@@ -337,7 +459,7 @@ def main():
 
     if arg.do == "search"  :
         # model_pars, data_pars, compute_pars = config_get_pars(arg)
-        js = json.load(open(arg.config_file, 'r'))  # Config
+        js = json.load(open(arg.config_file, 'rb'))  # Config
         js = js[arg.config_mode]  # test /uat /prod
 
 
